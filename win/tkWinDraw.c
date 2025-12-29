@@ -1610,6 +1610,36 @@ TkpDrawFrameEx(
 	    Tk_Height(tkwin) - 2 * highlightWidth, borderWidth, relief);
 }
 
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpFillTransparent --
+ *
+ *	Fill a rectangle with transparent pixels. This is a no-op on
+ *	Windows as transparent backgrounds are not supported.
+ *
+ * Results:
+ *	Always returns 0 (not supported).
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+TkpFillTransparent(
+    TCL_UNUSED(Tk_Window),
+    TCL_UNUSED(Drawable),
+    TCL_UNUSED(int),
+    TCL_UNUSED(int),
+    TCL_UNUSED(int),
+    TCL_UNUSED(int))
+{
+    return 0;
+}
+
 /*
  * Local Variables:
  * mode: c

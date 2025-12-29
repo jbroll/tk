@@ -1223,6 +1223,8 @@ MODULE_SCOPE void	TkpGetFontAttrsForChar(Tk_Window tkwin, Tk_Font tkfont,
 MODULE_SCOPE void	TkpDrawFrameEx(Tk_Window tkwin, Drawable drawable,
 			    Tk_3DBorder border, int highlightWidth,
 			    int borderWidth, int relief);
+MODULE_SCOPE int	TkpFillTransparent(Tk_Window tkwin, Drawable drawable,
+			    int x, int y, int width, int height);
 MODULE_SCOPE void	TkpShowBusyWindow(TkBusy busy);
 MODULE_SCOPE void	TkpHideBusyWindow(TkBusy busy);
 MODULE_SCOPE Tcl_Size	TkLengthOne(Tcl_Obj *);

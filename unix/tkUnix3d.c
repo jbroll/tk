@@ -17,6 +17,7 @@
 #include "tkMacOSXInt.h"
 #else
 #include "tkUnixInt.h"
+#include <X11/extensions/Xrender.h>
 #endif
 
 /*
@@ -500,3 +501,74 @@ TkpGetShadows(
  * fill-column: 78
  * End:
  */
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TkpFillTransparent --
+ *
+ *	Fill a rectangle with fully transparent pixels using XRender.
+ *	This is used for 32-bit ARGB visuals when no background color
+ *	is specified, allowing the root window to show through.
+ *
+ * Results:
+ *	1 if successful, 0 if XRender is not available or visual is
+ *	not suitable.
+ *
+ * Side effects:
+ *	Pixels in the drawable are set to transparent (alpha=0).
+ *
+ *----------------------------------------------------------------------
+ */
+
+int
+TkpFillTransparent(
+    Tk_Window tkwin,
+    Drawable drawable,
+    int x, int y,
+    int width, int height)
+{
+    Display *display = Tk_Display(tkwin);
+    Visual *visual = Tk_Visual(tkwin);
+    int depth = Tk_Depth(tkwin);
+    XRenderPictFormat *format;
+    Picture picture;
+    XRenderColor color;
+
+    /*
+     * Only works on 32-bit TrueColor visuals with alpha channel.
+     */
+
+    if (visual->c_class != TrueColor || depth != 32) {
+	return 0;
+    }
+
+    /*
+     * Find the ARGB32 format for this display.
+     */
+
+    format = XRenderFindStandardFormat(display, PictStandardARGB32);
+    if (format == NULL) {
+	return 0;
+    }
+
+    /*
+     * Create a picture for the drawable and fill with transparent.
+     */
+
+    picture = XRenderCreatePicture(display, drawable, format, 0, NULL);
+    if (picture == None) {
+	return 0;
+    }
+
+    color.red = 0;
+    color.green = 0;
+    color.blue = 0;
+    color.alpha = 0;
+
+    XRenderFillRectangle(display, PictOpSrc, picture, &color,
+	    x, y, (unsigned) width, (unsigned) height);
+
+    XRenderFreePicture(display, picture);
+    return 1;
+}

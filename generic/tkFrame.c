@@ -1443,9 +1443,13 @@ DisplayFrame(
 
     /*
      * If -background is set to "", no interior is drawn.
+     * However, for 32-bit ARGB visuals, fill with transparent pixels
+     * so the compositor can show what's behind.
      */
 
     if (framePtr->border == NULL) {
+	TkpFillTransparent(tkwin, Tk_WindowId(tkwin),
+		0, 0, Tk_Width(tkwin), Tk_Height(tkwin));
 	return;
     }
 
