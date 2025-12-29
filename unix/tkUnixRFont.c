@@ -851,6 +851,42 @@ Tk_MeasureCharsInContext(
 /*
  *----------------------------------------------------------------------
  *
+ * ShiftFromMask --
+ *
+ *	Compute the bit shift and width for a color mask.
+ *
+ * Results:
+ *	Sets *shiftPtr to the position of the lowest set bit in mask,
+ *	and *bitsPtr to the number of contiguous bits in the mask.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+ShiftFromMask(
+    unsigned long mask,		/* Color component mask from visual */
+    int *shiftPtr,		/* Output: bit position of mask */
+    int *bitsPtr)		/* Output: number of bits in mask */
+{
+    int shift = 0, bits = 0;
+
+    if (mask) {
+	while ((mask & 1) == 0) {
+	    mask >>= 1;
+	    shift++;
+	}
+	while (mask & 1) {
+	    mask >>= 1;
+	    bits++;
+	}
+    }
+    *shiftPtr = shift;
+    *bitsPtr = bits;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * LookUpColor --
  *
  *	Convert a pixel value to an XftColor.  This can be slow due to the
@@ -859,6 +895,11 @@ Tk_MeasureCharsInContext(
  * is kept, in the form of a linked list.  The returned color is moved
  * to the front of the list, so repeatedly asking for the same one
  * should be fast.
+ *
+ *	For TrueColor visuals, RGB values are extracted directly from the
+ * pixel value using the visual's masks, avoiding XQueryColor entirely.
+ * This is required for 32-bit ARGB visuals where XQueryColor fails with
+ * BadValue because the alpha bits confuse the colormap lookup.
  *
  * Results:
  *      A pointer to the XftColor structure for the requested color is
@@ -877,7 +918,6 @@ LookUpColor(Display *display,      /* Display to lookup colors on */
 	    unsigned long pixel)   /* Pixel value to translate to XftColor */
 {
     int i, last = -1, last2 = -1;
-    XColor xcolor;
 
     for (i = fontPtr->firstColor;
 	 i >= 0; last2 = last, last = i, i = fontPtr->colors[i].next) {
@@ -908,15 +948,50 @@ LookUpColor(Display *display,      /* Display to lookup colors on */
     }
 
     /*
-     * Translate the pixel value to a color.  Needs a server round-trip.
+     * Translate the pixel value to a color.
+     * For TrueColor visuals, extract RGB directly from the pixel using the
+     * visual's masks. This avoids XQueryColor which fails on 32-bit ARGB
+     * visuals because the alpha byte is misinterpreted as part of the
+     * colormap index.
      */
-    xcolor.pixel = pixel;
-    XQueryColor(display, fontPtr->colormap, &xcolor);
+    if (fontPtr->visual->c_class == TrueColor) {
+	int rShift, gShift, bShift;
+	int rBits, gBits, bBits;
+	unsigned long r, g, b;
 
-    fontPtr->colors[last].color.color.red = xcolor.red;
-    fontPtr->colors[last].color.color.green = xcolor.green;
-    fontPtr->colors[last].color.color.blue = xcolor.blue;
-    fontPtr->colors[last].color.color.alpha = 0xFFFF;
+	ShiftFromMask(fontPtr->visual->red_mask, &rShift, &rBits);
+	ShiftFromMask(fontPtr->visual->green_mask, &gShift, &gBits);
+	ShiftFromMask(fontPtr->visual->blue_mask, &bShift, &bBits);
+
+	/*
+	 * Extract each component and scale to 16-bit (0-65535).
+	 * The scaling formula maps the component's max value to 65535.
+	 */
+	r = (pixel & fontPtr->visual->red_mask) >> rShift;
+	g = (pixel & fontPtr->visual->green_mask) >> gShift;
+	b = (pixel & fontPtr->visual->blue_mask) >> bShift;
+
+	fontPtr->colors[last].color.color.red =
+		rBits ? (unsigned short)(r * 65535 / ((1 << rBits) - 1)) : 0;
+	fontPtr->colors[last].color.color.green =
+		gBits ? (unsigned short)(g * 65535 / ((1 << gBits) - 1)) : 0;
+	fontPtr->colors[last].color.color.blue =
+		bBits ? (unsigned short)(b * 65535 / ((1 << bBits) - 1)) : 0;
+	fontPtr->colors[last].color.color.alpha = 0xFFFF;
+    } else {
+	/*
+	 * Non-TrueColor: use XQueryColor (requires server round-trip).
+	 */
+	XColor xcolor;
+
+	xcolor.pixel = pixel;
+	XQueryColor(display, fontPtr->colormap, &xcolor);
+
+	fontPtr->colors[last].color.color.red = xcolor.red;
+	fontPtr->colors[last].color.color.green = xcolor.green;
+	fontPtr->colors[last].color.color.blue = xcolor.blue;
+	fontPtr->colors[last].color.color.alpha = 0xFFFF;
+    }
     fontPtr->colors[last].color.pixel = pixel;
 
     /*
